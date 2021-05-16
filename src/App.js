@@ -12,6 +12,10 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { useCollectionData } from 'react-firebase-hooks/firestore';
 import useLocalStorage from './hooks/useLocaStorage';
 
+import socket from './services/socket';
+import aes256 from 'aes256';
+
+
 firebase.initializeApp({
   apiKey: "AIzaSyDlZ3lau-4mVu9upxehozUC7bNIs83GNmI",
   authDomain: "acschat-ea681.firebaseapp.com",
@@ -25,17 +29,18 @@ firebase.initializeApp({
 const auth = firebase.auth();
 const firestore = firebase.firestore();
 const analytics = firebase.analytics();
+var aesKey;
+var cipher = aes256.createCipher('This is default key');
 
 
 function App() {
 
   const [user] = useAuthState(auth);
-  
 
   return (
     <div className="App">
       <header>
-        <h1>Admin chat page💬</h1>
+        <h1>Chat with us💬</h1>
         <SignOut />
       </header>
 
@@ -60,11 +65,13 @@ function App() {
 
 function SignIn() {
 
-
   const signInWithGoogle = () => {
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider);
   }
+
+  
+
 
   return (
     <>
@@ -84,28 +91,25 @@ function SignOut() {
 }
 
 function RoomSelect() {
-  const usersRef = firestore.collection("_users");
-  const query = usersRef;
-  const [users] = useCollectionData(query, { idField: 'email' });
-  const [statuses] = useCollectionData(query, { idField: 'status' });
-  console.log(users)
-
+  return <Redirect to={auth.currentUser.email} />
 
   const [room,setRoom] = useState("");
   return (
-  <div>
-    {users?.map((item) => (
-      <Link to={item.email} >
-      <div className="emailList">
-        <img src={item.photoURL} />
-        {item.email}
-      </div>
-      </Link>
-    ))}
+    <div>
+      <h3>
+      Enter Room ID {auth.currentUser.email}
+      </h3>
+      <form>
+        <input value={room} onChange={(e) => setRoom(e.target.value)} />
 
-  </div>
+        <Link to={"/"+room}>
+          <button className>
+            Join room
+          </button>
+        </Link>
+      </form>
+    </div>
   )
-  //<img src={item.status} />
 }
 
 
@@ -119,6 +123,7 @@ function ChatRoom() {
   const [formValue, setFormValue] = useState('');
 
   const [KEY, setKEY] = useLocalStorage("KEY")
+
   useEffect(() => {
     if(!KEY)
     {
@@ -128,11 +133,36 @@ function ChatRoom() {
     console.log(KEY);
   }, [KEY])
 
+  useEffect(() => {
+    console.log('useEffect()')
+    socket.on("getKey", data => {
+      console.log(data);
+      aesKey = data;
+    });
+  },[]);
+
 
   const sendMessage = async (e) => {
     e.preventDefault();
+    /*if(messages.length == 0) 
+    {
+      usersRef.add({
+        email: auth.currentUser.email,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        name: auth.currentUser.name
+      })
+    }*/
 
     const { uid, photoURL } = auth.currentUser;
+    if(messages.length == 0) 
+    {
+      await firestore.collection("_users").doc(auth.currentUser.email).set({
+        email: auth.currentUser.email,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        status: "https://lh3.googleusercontent.com/ZqtOV3QlnuiYt-xaV1hmIgM6iseu_3HIQ1bLfhAYvuyS9UedF0Gs0hFeJq_dbkxLxVjUv6FcYt6pR2W-kTu-iucLF3GyRFKM-_ZLc5H5EI7-x3YL-6A5V8MgNbrU13fO45e_MLCKF76W7AL_pdjSIU-YERA7QflRZKcRBg2XhOET5SGwqlqNUlm1NkeuFpDw_E4JbbS8SlfehjxlAT1euN9VlK313KF85cMU04um7zKxIOgOxAMCI2JtU-CK70ac9IYIKcUxgTSCSI1Xxu_j_11tohIFf7rUqqotHqT56AvklcWXiQJdZW9OYM2_W_3wwcdbutPH3j6xsSTIBz9PHg132lN06HYbl9qqc15bzKJaqPpg4zt_hHNSI-lwjjhmYMZftC85rQpaPbI5eTL7YCxNwKrBZCM1d9mcF0n8L3F9KRuXv8JbZRq03meZM7ddgnWZ8vDwwcn9mqUJ2VGmstcCcIuekSK6QL7WC3NFmrZyPPj1S3vhUKTA1cBDrLwRcg3LQrTOlyKA9LYZLVYTG1XJzAkVRPzzSixs60AUmuzbYe7QSf6dgVceRs1AOlDXi9KL3whd0GMFYfJbwBqotrRhcRC4QeyGALTLYxsfgyoOXLgP62UM-nx5PlPX6xwDQfSOset1QPmvMI9h9uWCrg7dkeaeunPsVOpEV1v8DJfQ5zrAyl0-GCqJk9NqMq1blp53L1JXtkgeYX57y0QO1qqa=s500-no?authuser=1",
+        photoURL: auth.currentUser.photoURL
+      })
+    }
 
     await messagesRef.add({
       uname: auth.currentUser.displayName,
@@ -146,10 +176,10 @@ function ChatRoom() {
     dummy.current.scrollIntoView({ behavior: 'smooth' });
   }
 
-/*  if (dbname != auth.currentUser.email)
+  if (dbname != auth.currentUser.email)
   {
     return <Redirect to={auth.currentUser.email} />
-  }*/
+  }
 
   return (<>
     <main>
